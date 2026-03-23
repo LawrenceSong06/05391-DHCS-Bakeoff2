@@ -162,7 +162,7 @@ window.addEventListener("load", (e: Event) => {
 	// Documentation here: https://github.com/svgdotjs/svg.draggable.js ... but it really is just this:
 	box.draggable();
 	// Of course, once the box has been dragged, you might want to know its location (e.g. in case you want to move anything else along with it). In this example, I add a new rectangle to the svg drawing:
-	let follower = svg.rect(10,10).fill("none").stroke("#ff0000");
+	// let follower = svg.rect(10,10).fill("none").stroke("#ff0000");
 
 	// ...and then I update its location whenever the box is being dragged:
 	box.on("dragmove", (e)=> {
@@ -178,8 +178,8 @@ window.addEventListener("load", (e: Event) => {
 		pivot_box.render();
 
 		let bounding = box.rbox(svg); // "rbox" is the bounding box in coordinates relative to the function's argument (in this case, the overall svg drawing area)
-		follower.size(2*canvasSize, bounding.height); // .size changes the size of the rectangle, as we saw above
-		follower.transform({position:{x:bounding.cx, y: bounding.cy}, origin: "center"}); // "cx"/"cy" are the x and y positions of the center point of the shape
+		// follower.size(2*canvasSize, bounding.height); // .size changes the size of the rectangle, as we saw above
+		// follower.transform({position:{x:bounding.cx, y: bounding.cy}, origin: "center"}); // "cx"/"cy" are the x and y positions of the center point of the shape
 	})
 
 	// ====== Trial engine events =============
