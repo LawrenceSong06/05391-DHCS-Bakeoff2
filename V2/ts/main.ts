@@ -149,9 +149,9 @@ class Point{
  * A "Shape" is anything that can be rendered in svg canvas
  */
 abstract class Shape {
+	public abstract set color(color: string);
 	public abstract render() : void;
 }
-
 
 /**
  * This is an interpretation of svgdotjs.Rect
@@ -171,7 +171,11 @@ class PivotRect extends Shape {
 		super();
 		this.pivot1 = new Point(0,0);
 		this.pivot2 = new Point(0,0);
-		this.rect = rect;
+		this.rect = rect; 
+	}
+
+	public set color(color : string) {
+		this.rect.fill(color);
 	}
 
 	/**
@@ -203,10 +207,31 @@ class PivotRect extends Shape {
 	public get rotation(){
 		return this.pivot1.angle_between(this.pivot2) - 45;
 	}
+
+	/**
+	 * @description Bind pivots to a pivots of `rect` in canvas `svg`
+	 * @param svg 
+	 * @param rect 
+	 */
+	public bind(svg : svgdotjs.Svg, rect : svgdotjs.Rect){
+		const side_length = rect.width() as number;
+		let rot = rect.transform().rotate%90;
+		rot = (rot < 0 ? 90 + rot : rot)/180 * Math.PI;
+		const x_offset = Math.sin(rot) * side_length;
+
+		const pivot1 : Point = new Point(rect.rbox(svg).x + x_offset, rect.rbox(svg).y);
+		const center : Point = new Point(rect.rbox(svg).cx, rect.rbox(svg).cy);
+		const pivot2 : Point = pivot1.add(center.subtract(pivot1).scale(2));
+
+		this.pivot1_coord = {x: pivot1.x, y: pivot1.y};
+		this.pivot2_coord = {x: pivot2.x, y: pivot2.y};
+	}
+
 	public render() : void {
 		const size = this.side_length;
 		const position = {x: this.pivot1.x, y: this.pivot1.y};
 		const rotation = this.rotation;
+		
 		this.rect.size(size, size);
 		this.rect.transform({position: position, rotate: rotation, origin: "top left"})
 	}
@@ -218,13 +243,19 @@ class PivotRect extends Shape {
  * just like all cursors do
  */
 abstract class Cursor extends Shape {
-	public x : number;
-	public y : number;
+	private position : Point;
 
 	constructor(){
 		super();
-		this.x = 0;
-		this.y = 0;
+		this.position = new Point(0, 0);
+	}
+
+	public get x(){
+		return this.position.x;
+	}
+
+	public get y(){
+		return this.position.y;
 	}
 
 	/**
@@ -234,8 +265,7 @@ abstract class Cursor extends Shape {
 	 * @param y 
 	 */
 	public point_to(x : number, y : number) : void {
-		this.x = x;
-		this.y = y;
+		this.position.coord = {x, y};
 	};
 
 	public abstract render() : void;
@@ -259,13 +289,20 @@ class CrossCursor extends Cursor {
 	 * @param svg 
 	 * @param color 
 	 */
-	constructor(svg : svgdotjs.Svg, color : string){
+	constructor(svg : svgdotjs.Svg){
 		super();
-		this.cursor_hori = svg.line([[0, 0], [2*canvasSize, 0]]).fill("none").stroke(color);
-		this.cursor_verti = svg.line([[0, 0], [0, 2*canvasSize]]).fill("none").stroke(color);
+		this.cursor_hori = svg.line([[0, 0], [2*canvasSize, 0]]).fill("none").stroke("#000000");
+		this.cursor_verti = svg.line([[0, 0], [0, 2*canvasSize]]).fill("none").stroke("#000000");
+	}
+
+	public set color(color: string) {
+		this.cursor_hori.stroke(color);
+		this.cursor_verti.stroke(color);
 	}
 
 	public render(){
+		this.cursor_hori.stroke(this.color);
+		this.cursor_verti.stroke(this.color);
 		this.cursor_hori.transform({position:{x: 0, y: this.y}, origin: "center"});
 		this.cursor_verti.transform({position:{x: this.x, y: 0}, origin: "center"});
 	}
@@ -346,7 +383,8 @@ window.addEventListener("load", (e: Event) => {
 	// This is one custom curosr called "cross cursor"
 	// It looks like a big cross, which will help users to align the rectangles
 	// It is shown when user is adjusting pivots of the rectangle
-	let cross_cursor : CrossCursor = new CrossCursor(svg, "#ff0000");
+	let cross_cursor : CrossCursor = new CrossCursor(svg);
+	cross_cursor.color = "#ff0000";
 	cross_cursor.hide();
 
 
@@ -444,10 +482,12 @@ window.addEventListener("load", (e: Event) => {
 
 	trial.addEventListener("start", () => {
 		console.log("starting!");
+		pivot_box.bind(svg, box);
 	});
-
+	
 	// Lastly, trial.getTaskNumber() will return the number (integer) of the current task
 	trial.addEventListener("newTask", () => {
 		console.log(trial.getTaskNumber());
+		pivot_box.bind(svg, box);
 	});
 });

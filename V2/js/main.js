@@ -142,6 +142,9 @@ class PivotRect extends Shape {
         this.pivot2 = new Point(0, 0);
         this.rect = rect;
     }
+    set color(color) {
+        this.rect.fill(color);
+    }
     /**
      * @description Sets the `x` and `y` of `pivot1`
      * @param {x, y}
@@ -168,6 +171,22 @@ class PivotRect extends Shape {
     get rotation() {
         return this.pivot1.angle_between(this.pivot2) - 45;
     }
+    /**
+     * @description Bind pivots to a pivots of `rect` in canvas `svg`
+     * @param svg
+     * @param rect
+     */
+    bind(svg, rect) {
+        const side_length = rect.width();
+        let rot = rect.transform().rotate % 90;
+        rot = (rot < 0 ? 90 + rot : rot) / 180 * Math.PI;
+        const x_offset = Math.sin(rot) * side_length;
+        const pivot1 = new Point(rect.rbox(svg).x + x_offset, rect.rbox(svg).y);
+        const center = new Point(rect.rbox(svg).cx, rect.rbox(svg).cy);
+        const pivot2 = pivot1.add(center.subtract(pivot1).scale(2));
+        this.pivot1_coord = { x: pivot1.x, y: pivot1.y };
+        this.pivot2_coord = { x: pivot2.x, y: pivot2.y };
+    }
     render() {
         const size = this.side_length;
         const position = { x: this.pivot1.x, y: this.pivot1.y };
@@ -184,8 +203,13 @@ class PivotRect extends Shape {
 class Cursor extends Shape {
     constructor() {
         super();
-        this.x = 0;
-        this.y = 0;
+        this.position = new Point(0, 0);
+    }
+    get x() {
+        return this.position.x;
+    }
+    get y() {
+        return this.position.y;
     }
     /**
      * @description Points cursor to coordinate `(x, y)`
@@ -194,8 +218,7 @@ class Cursor extends Shape {
      * @param y
      */
     point_to(x, y) {
-        this.x = x;
-        this.y = y;
+        this.position.coord = { x, y };
     }
     ;
 }
@@ -211,12 +234,18 @@ class CrossCursor extends Cursor {
      * @param svg
      * @param color
      */
-    constructor(svg, color) {
+    constructor(svg) {
         super();
-        this.cursor_hori = svg.line([[0, 0], [2 * canvasSize, 0]]).fill("none").stroke(color);
-        this.cursor_verti = svg.line([[0, 0], [0, 2 * canvasSize]]).fill("none").stroke(color);
+        this.cursor_hori = svg.line([[0, 0], [2 * canvasSize, 0]]).fill("none").stroke("#000000");
+        this.cursor_verti = svg.line([[0, 0], [0, 2 * canvasSize]]).fill("none").stroke("#000000");
+    }
+    set color(color) {
+        this.cursor_hori.stroke(color);
+        this.cursor_verti.stroke(color);
     }
     render() {
+        this.cursor_hori.stroke(this.color);
+        this.cursor_verti.stroke(this.color);
         this.cursor_hori.transform({ position: { x: 0, y: this.y }, origin: "center" });
         this.cursor_verti.transform({ position: { x: this.x, y: 0 }, origin: "center" });
     }
@@ -234,7 +263,7 @@ window.addEventListener("load", (e) => {
     // =========== This part is required: =========== 
     // Initialize the "judge" object with the number of tasks per trial and your team name. 
     // The third parameter sets the trial engine in "verbose" mode or not -- if it is set to "true", all the events will be logged to the Console. (You may wish to set it to "false" if you find these logs overwhelming.)
-    const trial = new Trial(tasksLength, "teamName", true);
+    const trial = new Trial(tasksLength, "NAME", true);
     document.getElementById("main").style.alignItems = "flex-start";
     document.getElementById("main").style.justifyContent = "flex-end";
     // You also need to add some way for the user to indicate they are done with their task. 
@@ -282,7 +311,8 @@ window.addEventListener("load", (e) => {
     // This is one custom curosr called "cross cursor"
     // It looks like a big cross, which will help users to align the rectangles
     // It is shown when user is adjusting pivots of the rectangle
-    let cross_cursor = new CrossCursor(svg, "#ff0000");
+    let cross_cursor = new CrossCursor(svg);
+    cross_cursor.color = "#ff0000";
     cross_cursor.hide();
     // And applicationElements.box is the box itself. :) You can change it with any of the things at https://svgjs.dev/docs/3.2/manipulating/
     let box = applicationElements.box;
@@ -357,9 +387,11 @@ window.addEventListener("load", (e) => {
     // trial.on(eventName, callback) will allow you to register a callback (handler) to any of the above.
     trial.addEventListener("start", () => {
         console.log("starting!");
+        pivot_box.bind(svg, box);
     });
     // Lastly, trial.getTaskNumber() will return the number (integer) of the current task
     trial.addEventListener("newTask", () => {
         console.log(trial.getTaskNumber());
+        pivot_box.bind(svg, box);
     });
 });

@@ -15,6 +15,9 @@ class Point {
 		this.x = x;
 		this.y = y;
 	}
+	scale(k : number){
+		return new Point(k*this.x, k*this.y);
+	}
 	subtract(P : Point) {
 		return new Point(this.x - P.x, this.y - P.y);
 	}
@@ -53,6 +56,19 @@ class PivotBox {
 	}
 	rotation(){
 		return this.pivot1.angle_between(this.pivot2);
+	}
+	public bind(svg : svgdotjs.Svg, rect : svgdotjs.Rect){
+		const side_length = rect.width() as number;
+		let rot = rect.transform().rotate%90;
+		rot = (rot < 0 ? 90 + rot : rot)/180 * Math.PI;
+		const x_offset = Math.sin(rot) * side_length;
+
+		const pivot1 : Point = new Point(rect.rbox(svg).x + x_offset, rect.rbox(svg).y);
+		const center : Point = new Point(rect.rbox(svg).cx, rect.rbox(svg).cy);
+		const pivot2 : Point = pivot1.add(center.subtract(pivot1).scale(2));
+
+		this.pivot1 = new Point(pivot1.x, pivot1.y);
+		this.pivot2 = new Point(pivot2.x, pivot2.y);
 	}
 	render() : void {
 		const size = Math.sin(1/4 * Math.PI) * this.diameter();
@@ -192,10 +208,12 @@ window.addEventListener("load", (e: Event) => {
 
 	trial.addEventListener("start", () => {
 		console.log("starting!");
+		pivot_box.bind(svg, box);
 	});
-
+	
 	// Lastly, trial.getTaskNumber() will return the number (integer) of the current task
 	trial.addEventListener("newTask", () => {
 		console.log(trial.getTaskNumber());
+		pivot_box.bind(svg, box);
 	});
 });
