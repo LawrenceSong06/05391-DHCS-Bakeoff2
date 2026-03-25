@@ -8,60 +8,256 @@ const tasksLength = 10;
 // Documentation on the main SVG.js library is here: https://svgjs.dev/docs/3.2
 // Documentation on the "draggable" SVG.js plugin is here:
 // https://github.com/svgdotjs/svg.draggable.js
-class Point {
-	x : number;
-	y : number;
+
+// Defining a higher-order function "bound" that creates a "bounding" function
+// this function can be used conveniently in the future when we are bounding
+// a number. e.g. we do not want anything to go outside of the canvas, so we can call
+// bound(0, canvasSize)(x) to bound x by [0, canvasSize]
+/**
+ * @description bound(`lower`, `upper`) returns a function f(x : number) : number that will
+ * 				bound `x` in range [lower, upper]. 
+ * 
+ * @param lower the lower bound
+ * @param upper the upper bound
+ * 
+ * @returns f(x : number) : number that "bounds" x by [lower, upper]. 
+ */ 
+function bound(lower : number, upper : number) {
+	/**
+	 * @description "bounds" x by [lower, upper]. 
+	 * 
+	 * @param x 
+	 * 
+	 * @returns x if `lower` <= x <= `upper`
+	 * @returns `upper` if x > upper
+	 * @returns `lower` if x < lower
+	 */
+	const res = 
+		function(x : number) : number {
+			return Math.min(Math.max(x, lower), upper);
+		};
+
+	return res;
+}
+
+/**
+ * Point Class
+ * A "Point" is a 2D-vector (x, y)
+ * Just like the mathematical vector, you can substract and add vectors
+ * There are also a lot helper functions for vector operations
+ * 
+ * This is helpful for future simplifying code related with axis computation.
+ */
+class Point{
+	public x : number;
+	public y : number;
 	constructor(x, y) {
 		this.x = x;
 		this.y = y;
 	}
-	subtract(P : Point) {
-		return new Point(this.x - P.x, this.y - P.y);
+
+	// ---- Setters ----
+	
+	public set coord({x = 0, y = 0}) {
+		this.x = x;
+		this.y = y;
 	}
-	add(P : Point) {
-		return new Point(this.x + P.x, this.y + P.y);
-	}
-	modulo(){
+
+	// ---- Getters ----
+
+	/**
+	 * @returns ||`this`|| (the modulo, or length of `this`) 
+	 */
+	public get modulo(){
 		return Math.sqrt(this.x**2 + this.y**2);
 	}
-	angle() {
+
+	/**
+	 * @returns the angle between x-axis and `this`, in degrees
+	 */
+	public get angle() {
 		const angle : number = Math.atan2(this.y, this.x);
 		return angle * 180 / Math.PI;
 	}
-	distance_to(P : Point) {
-		return this.subtract(P).modulo();
+
+	// ---- Other Methods ----
+
+	/**
+	 * @description Multiplying a point by a scalar `k`
+	 * @param k 
+	 * @returns `k` * `this`
+	 */
+	public scale(k : number){
+		return new Point(k*this.x, k*this.y);
 	}
-	angle_between(P : Point) {
-		return P.subtract(this).angle();
+
+	/**
+	 * @description Add two points
+	 * @param P 
+	 * @returns `this` + `P`
+	 */
+	public add(P : Point) {
+		return new Point(this.x + P.x, this.y + P.y);
+	}
+
+	/**
+	 * @description Subtracting two points
+	 * @param P 
+	 * @returns `this` - `P`
+	 */
+	public subtract(P : Point) {
+		return this.add(P.scale(-1));
+	}
+
+	/**
+	 * @param P 
+	 * @returns the distance from `this` to `P`
+	 */
+	public distance_to(P : Point) {
+		return this.subtract(P).modulo;
+	}
+
+	/**
+	 * @param Ps 
+	 * @returns the `P : Point` in `Ps` that is closest to this point
+	 */
+	public closest(Ps : Point[]) : Point {
+		const res = 
+			Ps.reduce((a, b)=>{
+				// We take the "closer" one
+				if (this.distance_to(a) < this.distance_to(b)) {
+					return a;
+				}
+				
+				return b;
+			}, Ps[0]);
+
+		return res;
+	}
+
+	/**
+	 * @param P 
+	 * @returns the angle between `P` and `this`, in degrees
+	 */
+	public angle_between(P : Point) {
+		return P.subtract(this).angle;
 	}
 }
-class PivotBox {
-	box : svgdotjs.Rect;
-	pivot1 : Point;
-	pivot2 : Point;
-	constructor(box : svgdotjs.Rect) {
-		this.box = box;
+
+/**
+ * Shape Abstract Class
+ * A "Shape" is anything that can be rendered in svg canvas
+ */
+abstract class Shape {
+	public abstract render() : void;
+}
+
+
+/**
+ * This is an interpretation of svgdotjs.Rect
+ * It defines a rectangle by 2 pivots on a diagonol
+ */
+class PivotRect extends Shape {
+	private rect : svgdotjs.Rect;
+	public pivot1 : Point;
+	public pivot2 : Point;
+
+	// Binding an existing rect
+	// this can be understood as "interpretating" rect as a PivotRect 
+	/**
+	 * @param rect The rect to be interpreted as PivotRect
+	 */
+	constructor(rect : svgdotjs.Rect) {
+		super();
+		this.pivot1 = new Point(0,0);
+		this.pivot2 = new Point(0,0);
+		this.rect = rect;
 	}
-	set_pivot1(x : number, y : number){
-		this.pivot1 = new Point(x, y);
+
+	/**
+	 * @description Sets the `x` and `y` of `pivot1`
+	 * @param {x, y}  
+	 */
+	public set pivot1_coord({x = 0, y = 0}){
+		this.pivot1.coord = {x: x, y: y};
 	}
-	set_pivot2(x : number, y : number){
-		this.pivot2 = new Point(x, y);
+
+	/**
+	 * @description Sets the `x` and `y` of `pivot2`
+	 * @param {x, y}  
+	 */
+	public set pivot2_coord({x = 0, y = 0}){
+		this.pivot2.coord = {x: x, y: y};
 	}
-	side_length(){
+
+	/**
+	 * @returns the side_length of the rectangle
+	 */
+	public get side_length(){
 		return Math.sin(1/4 * Math.PI) * this.pivot1.distance_to(this.pivot2);
 	}
-	rotation(){
+
+	/**
+	 * @returns the rotation of this rectangle
+	 */
+	public get rotation(){
 		return this.pivot1.angle_between(this.pivot2) - 45;
 	}
-	render() : void {
-		const size = this.side_length();
+	public render() : void {
+		const size = this.side_length;
 		const position = {x: this.pivot1.x, y: this.pivot1.y};
-		const rotation = this.rotation();
-		this.box.size(size, size);
-		this.box.transform({position: position, rotate: rotation, origin: "top left"})
+		const rotation = this.rotation;
+		this.rect.size(size, size);
+		this.rect.transform({position: position, rotate: rotation, origin: "top left"})
 	}
 }
+
+abstract class Cursor extends Shape {
+	public x : number;
+	public y : number;
+
+	constructor(){
+		super();
+		this.x = 0;
+		this.y = 0;
+	}
+
+	public point_at(x : number, y : number) : void {
+		this.x = x;
+		this.y = y;
+	};
+
+	public abstract render() : void;
+	public abstract hide() : void;
+	public abstract show() : void;
+}
+
+class CrossCursor extends Cursor {
+	private cursor_hori : svgdotjs.Line;
+	private cursor_verti : svgdotjs.Line;
+
+	constructor(svg : svgdotjs.Svg, color : string){
+		super();
+		this.cursor_hori = svg.line([[0, 0], [2*canvasSize, 0]]).fill("none").stroke(color);
+		this.cursor_verti = svg.line([[0, 0], [0, 2*canvasSize]]).fill("none").stroke(color);
+	}
+
+	public render(){
+		this.cursor_hori.transform({position:{x: 0, y: this.y}, origin: "center"});
+		this.cursor_verti.transform({position:{x: this.x, y: 0}, origin: "center"});
+	}
+
+	public hide(){
+		this.cursor_hori.opacity(0);
+		this.cursor_verti.opacity(0);
+	}
+
+	public show(){
+		this.cursor_hori.opacity(1);
+		this.cursor_verti.opacity(1);
+	}
+}
+
 // As before, we add our parts within a "load" event to make sure the HTML stuff has loaded first. 
 window.addEventListener("load", (e: Event) => {
 	// =========== This part is required: =========== 
@@ -109,118 +305,111 @@ window.addEventListener("load", (e: Event) => {
 	let grid : svgdotjs.G = applicationElements.grid;
 	// You could add other background-y things to this group. You also may remove the grid lines with grid.clear() (but I can't personally think of a good reason why you would want to?).
 
-	// =========== Custom Cursor ==========
-	let closer_to_pivot1 : boolean = false;
+	// =========== Constants ==============
+	// This is the bounding function that bounds a coordinate in the svg canvas
+	const canvasBound = bound(0, canvasSize);
 
-	let offsetX = 0;
-	let offsetY = 0;
-	let cursor_hori : svgdotjs.Line = svg.line([[0, 0], [2*canvasSize, 0]]).fill("none").stroke("#ff0000");
-	let cursor_verti : svgdotjs.Line = svg.line([[0, 0], [0, 2*canvasSize]]).fill("none").stroke("#ff0000");
-	cursor_hori.opacity(0);
-	cursor_verti.opacity(0);
-
-	let follower = svg.polygon("0,0 0,1, 1,0").fill("#8e8e8e").stroke("none");
-	follower.attr('pointer-events', 'none');
-	document.addEventListener("mousemove", (e : MouseEvent) => {
-		if(document.pointerLockElement == box.node) {
-			offsetX = Math.min(Math.max(0, offsetX + e.movementX), canvasSize);
-			offsetY = Math.min(Math.max(0, offsetY + e.movementY), canvasSize);
-			cursor_hori.transform({position:{x: 0, y: offsetY}, origin: "center"});
-			cursor_verti.transform({position:{x: offsetX, y: 0}, origin: "center"});
-
-			if (closer_to_pivot1){
-				pivot_box.set_pivot1(offsetX, offsetY);
-			}else {
-				pivot_box.set_pivot2(offsetX, offsetY);
-			}
-			pivot_box.render();
-
-			const x = pivot_box.pivot1.x
-			const y = pivot_box.pivot1.y
-
-			follower.size(pivot_box.side_length(), pivot_box.side_length());
-			follower.transform({position:{x, y}, rotate: pivot_box.rotation(), origin: "top left"}); // "cx"/"cy" are the x and y positions of the center point of the shape
-		}
+	// =========== Variables ==============
+	// This is the live position of the actual cursor in the svg canvas
+	// It is activly updating to current position of the actual cursor 
+	let cursor_position : Point = new Point(0, 0);
+	svg.node.addEventListener("mousemove", (e : MouseEvent) => {
+		cursor_position.coord = {x: e.offsetX, y: e.offsetY};
 	});
+
+	// =========== Custom Cursor ==========
+
+	// --- Cross Cursor ---
+	// This is one custom curosr called "cross cursor"
+	// It looks like a big cross, which will help users to align the rectangles
+	// It is shown when user is adjusting pivots of the rectangle
+	let cross_cursor : CrossCursor = new CrossCursor(svg, "#ff0000");
+	cross_cursor.hide();
 
 
 	// And applicationElements.box is the box itself. :) You can change it with any of the things at https://svgjs.dev/docs/3.2/manipulating/
 	let box : svgdotjs.Rect = applicationElements.box;
 	box.fill("#11eaea");
 
-	const defualt_size = defaultSquarePosition.size;
-	const default_pivot1 = new Point(
-		defaultSquarePosition.location.x, 
-		defaultSquarePosition.location.y - defualt_size/2
-	);
-	const default_pivot2 = new Point(
-		defaultSquarePosition.location.x, 
-		defaultSquarePosition.location.y + defualt_size/2
-	);
-	
 	// Reinterpretate the box as a "pivot box" (a box defined by two pivots)
-	let pivot_box = new PivotBox(box);
-	pivot_box.set_pivot1(default_pivot1.x, default_pivot1.y);
-	pivot_box.set_pivot2(default_pivot2.x, default_pivot2.y);
+	let pivot_box = new PivotRect(box);
+	
+	// Setting the default transformation of `box`
+	pivot_box.pivot1_coord = {
+		x: defaultSquarePosition.location.x, 
+		y: defaultSquarePosition.location.y - defaultSquarePosition.size/2
+	};
+	pivot_box.pivot2_coord = {
+		x: defaultSquarePosition.location.x, 
+		y: defaultSquarePosition.location.y + defaultSquarePosition.size/2
+	};
 	pivot_box.render();
 
 	// ====== Manipulating them =============
-	// For example, you could add a button that just randomly re-sizes/positions the box:
-	let randomnessButton : HTMLButtonElement = document.createElement("button");
-	document.getElementById("applicationArea").appendChild(randomnessButton);
-	randomnessButton.innerText = "go wild";
-
-	randomnessButton.addEventListener("click", (e: PointerEvent) => {
-		// To change the box's size, I recommend box.size(), like this:
-		let size = randomBetween(10,100); // randomBetween function is provided by the framework, because I use it there myself
-		box.size(size, size); // two arguments because the first is width and the second is height. But these are squares, so I repeat it.
-		// (there is also box.scale(number), but it will change the local coordinates, affecting the translation/rotations as well)
-
-		// For translation and rotation, I recommend box.transform(), https://svgjs.dev/docs/3.2/manipulating/#transforming:
-		let rotation = randomBetween(0, 90);
-		let position = {x:randomBetween(size, canvasSize-size), y:randomBetween(size, canvasSize-size)};
-		box.transform({rotate: rotation, position: position, origin: "center"});
-		// ...and you do have to do both of them in the *same* transform() call. Otherwise, things get weird: if you do the rotation before the position, the position will be in the new, rotated coordinates; if you do the position before the rotation, the position overrides/re-sets the rotation.
-	});
 
 	
+
+
 	// ====== SVG element events =============
 	// You can also add event handlers to svg elements. The syntax is similar (but not identical, unfortunately) to the baseline HTML event handlers: https://svgjs.dev/docs/3.2/events/#element-on
-	svg.node.addEventListener("mousedown",(e : PointerEvent)=>{
-		box.node.requestPointerLock();
-		const cursor = new Point(e.offsetX, e.offsetY);
-		if (cursor.distance_to(pivot_box.pivot1) < cursor.distance_to(pivot_box.pivot2)){
-			closer_to_pivot1 = true;
-			offsetX = pivot_box.pivot1.x;
-			offsetY = pivot_box.pivot1.y;
-		}else{
-			closer_to_pivot1 = false;
-			offsetX = pivot_box.pivot2.x;
-			offsetY = pivot_box.pivot2.y;
-		}
 
-		cursor_hori.transform({position:{x: 0, y: offsetY}, origin: "center"});
-		cursor_verti.transform({position:{x: offsetX, y: 0}, origin: "center"});
-		cursor_hori.opacity(1);
-		cursor_verti.opacity(1);
-	});
-
-	document.addEventListener("mouseup", () => {
-		document.exitPointerLock();
-		cursor_hori.opacity(0);
-		cursor_verti.opacity(0);
-	})
-
-	box.on("mousemove", (e : MouseEvent) => {
-
-	});
 
 	// ====== Dragging elements =============
 	// Because the "draggable" plugin is included, you can also set any svg element (shapee or group) to "draggable" -- this does exactly what you hope it does (i.e., it makes it so that you can click and drag the element). 
 	// Documentation here: https://github.com/svgdotjs/svg.draggable.js ... but it really is just this:
 
-	// Of course, once the box has been dragged, you might want to know its location (e.g. in case you want to move anything else along with it). In this example, I add a new rectangle to the svg drawing:
-	// ...and then I update its location whenever the box is being dragged:
+	/**
+	 * This code block if for the "dragging" behavior of box
+	 * 
+	 * The pivot of `box` closest to cursor's position when the dragging starts 
+	 * will be chosen to be adjusted
+	 * 
+	 * The pivots can be dragged at any position from the svg canvas. This is a bit like the
+	 * "bubble cursor" we saw in class  
+	 */
+	{
+		// --- Local Variables Needed ---
+		// closest_pivot is the pivot that is closest to the cursor.
+		let closest_pivot : Point = pivot_box.pivot1;
+
+		// --- The Events ---
+		// When the mouse is pressed down, at any position, 
+		// the closest pivot to the user's cursor is "chosen" to be adjusted
+		svg.node.addEventListener("mousedown",(e : PointerEvent)=>{
+			box.node.requestPointerLock();
+
+			// Set the `closest_pivot` so
+			// `mousemove` event can know which pivot are we updating 
+			closest_pivot = cursor_position.closest([pivot_box.pivot1, pivot_box.pivot2])
+
+			// Re-position the cross cursor to avoid flashing, and then show it 
+			cross_cursor.point_at(closest_pivot.x, closest_pivot.y);
+			cross_cursor.show();
+		});
+		
+		// Whe the mouse is moving, the pivot chosen should follow the mouse, or the cross cursor
+		document.addEventListener("mousemove", (e : MouseEvent) => {
+			// We should only do all these when we are indeed adjusting the box
+			if(document.pointerLockElement === box.node) {
+				// bound cross cursor's position in canvasBound, so that is does not go out of the canvas
+				cross_cursor.point_at(
+					canvasBound(cross_cursor.x + e.movementX), 
+					canvasBound(cross_cursor.y + e.movementY)
+				);
+				cross_cursor.render();
+
+				// set the pivot position and re-render the box
+				closest_pivot.coord = {x: cross_cursor.x, y: cross_cursor.y};
+				pivot_box.render();	
+			}
+		});
+
+		// When mouse is up, we should "release" pivot point, and hide the cross cursor
+		document.addEventListener("mouseup", () => {
+			document.exitPointerLock();
+			cross_cursor.hide();
+		})
+	}
 
 	// ====== Trial engine events =============
 	// The trial engine also has some events you can add handlers for:
