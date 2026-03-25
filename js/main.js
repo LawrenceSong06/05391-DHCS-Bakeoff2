@@ -176,19 +176,41 @@ class PivotRect extends Shape {
         this.rect.transform({ position: position, rotate: rotation, origin: "top left" });
     }
 }
+/**
+ * --- Cursor Class ---
+ * Cursor is a special type of shape that "points to" a specific spot in canvas,
+ * just like all cursors do
+ */
 class Cursor extends Shape {
     constructor() {
         super();
         this.x = 0;
         this.y = 0;
     }
-    point_at(x, y) {
+    /**
+     * @description Points cursor to coordinate `(x, y)`
+     *
+     * @param x
+     * @param y
+     */
+    point_to(x, y) {
         this.x = x;
         this.y = y;
     }
     ;
 }
+/**
+ * --- CrossCursor Class ---
+ * A cross cursor is a cursor that looks like a big cross. It is composed of two lines,
+ * one horizontal, and one vertical
+ */
 class CrossCursor extends Cursor {
+    /**
+     * @description Binds cursor to a canvas, and sets its color
+     *
+     * @param svg
+     * @param color
+     */
     constructor(svg, color) {
         super();
         this.cursor_hori = svg.line([[0, 0], [2 * canvasSize, 0]]).fill("none").stroke(color);
@@ -305,7 +327,7 @@ window.addEventListener("load", (e) => {
             // `mousemove` event can know which pivot are we updating 
             closest_pivot = cursor_position.closest([pivot_box.pivot1, pivot_box.pivot2]);
             // Re-position the cross cursor to avoid flashing, and then show it 
-            cross_cursor.point_at(closest_pivot.x, closest_pivot.y);
+            cross_cursor.point_to(closest_pivot.x, closest_pivot.y);
             cross_cursor.show();
         });
         // Whe the mouse is moving, the pivot chosen should follow the mouse, or the cross cursor
@@ -313,7 +335,7 @@ window.addEventListener("load", (e) => {
             // We should only do all these when we are indeed adjusting the box
             if (document.pointerLockElement === box.node) {
                 // bound cross cursor's position in canvasBound, so that is does not go out of the canvas
-                cross_cursor.point_at(canvasBound(cross_cursor.x + e.movementX), canvasBound(cross_cursor.y + e.movementY));
+                cross_cursor.point_to(canvasBound(cross_cursor.x + e.movementX), canvasBound(cross_cursor.y + e.movementY));
                 cross_cursor.render();
                 // set the pivot position and re-render the box
                 closest_pivot.coord = { x: cross_cursor.x, y: cross_cursor.y };

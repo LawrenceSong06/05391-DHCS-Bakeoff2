@@ -212,6 +212,11 @@ class PivotRect extends Shape {
 	}
 }
 
+/**
+ * --- Cursor Class ---
+ * Cursor is a special type of shape that "points to" a specific spot in canvas,
+ * just like all cursors do
+ */
 abstract class Cursor extends Shape {
 	public x : number;
 	public y : number;
@@ -222,7 +227,13 @@ abstract class Cursor extends Shape {
 		this.y = 0;
 	}
 
-	public point_at(x : number, y : number) : void {
+	/**
+	 * @description Points cursor to coordinate `(x, y)`
+	 * 
+	 * @param x 
+	 * @param y 
+	 */
+	public point_to(x : number, y : number) : void {
 		this.x = x;
 		this.y = y;
 	};
@@ -232,10 +243,22 @@ abstract class Cursor extends Shape {
 	public abstract show() : void;
 }
 
+/**
+ * --- CrossCursor Class ---
+ * A cross cursor is a cursor that looks like a big cross. It is composed of two lines, 
+ * one horizontal, and one vertical
+ */
 class CrossCursor extends Cursor {
+	// The two lines
 	private cursor_hori : svgdotjs.Line;
 	private cursor_verti : svgdotjs.Line;
 
+	/**
+	 * @description Binds cursor to a canvas, and sets its color
+	 * 
+	 * @param svg 
+	 * @param color 
+	 */
 	constructor(svg : svgdotjs.Svg, color : string){
 		super();
 		this.cursor_hori = svg.line([[0, 0], [2*canvasSize, 0]]).fill("none").stroke(color);
@@ -383,7 +406,7 @@ window.addEventListener("load", (e: Event) => {
 			closest_pivot = cursor_position.closest([pivot_box.pivot1, pivot_box.pivot2])
 
 			// Re-position the cross cursor to avoid flashing, and then show it 
-			cross_cursor.point_at(closest_pivot.x, closest_pivot.y);
+			cross_cursor.point_to(closest_pivot.x, closest_pivot.y);
 			cross_cursor.show();
 		});
 		
@@ -392,7 +415,7 @@ window.addEventListener("load", (e: Event) => {
 			// We should only do all these when we are indeed adjusting the box
 			if(document.pointerLockElement === box.node) {
 				// bound cross cursor's position in canvasBound, so that is does not go out of the canvas
-				cross_cursor.point_at(
+				cross_cursor.point_to(
 					canvasBound(cross_cursor.x + e.movementX), 
 					canvasBound(cross_cursor.y + e.movementY)
 				);
