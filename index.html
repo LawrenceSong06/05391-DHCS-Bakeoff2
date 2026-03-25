@@ -17,20 +17,6 @@
         </h1>
         <div id="versions"></div>
 	</body>
-	<script delay>
-        const VERSIONS = [
-            "V1",
-            "V2"
-        ]
-
-        let versions = document.getElementById("versions");
-        VERSIONS.map((v) => {
-            let a = document.createElement("a");
-            a.href = `./${v}`;
-            a.innerText = `${v}`;
-            versions.appendChild(a);
-
-            return v;
-        })
-    </script>
+    <script src="versions.js" defer></script>
+	<script src="main.js" defer></script>
 </html>
