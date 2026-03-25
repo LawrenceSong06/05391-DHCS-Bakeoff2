@@ -215,8 +215,8 @@ class PivotRect extends Shape {
 	 */
 	public bind(svg : svgdotjs.Svg, rect : svgdotjs.Rect){
 		const side_length = rect.width() as number;
-		let rot = rect.transform().rotate%90;
-		rot = (rot < 0 ? 90 + rot : rot)/180 * Math.PI;
+		let rot = rect.transform().rotate % 90;
+		rot = (rot < 0 ? 90 + rot : rot) / 180 * Math.PI;
 		const x_offset = Math.sin(rot) * side_length;
 
 		const pivot1 : Point = new Point(rect.rbox(svg).x + x_offset, rect.rbox(svg).y);
@@ -445,6 +445,7 @@ window.addEventListener("load", (e: Event) => {
 
 			// Re-position the cross cursor to avoid flashing, and then show it 
 			cross_cursor.point_to(closest_pivot.x, closest_pivot.y);
+			cross_cursor.render();
 			cross_cursor.show();
 		});
 		
