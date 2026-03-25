@@ -358,6 +358,7 @@ window.addEventListener("load", (e) => {
             closest_pivot = cursor_position.closest([pivot_box.pivot1, pivot_box.pivot2]);
             // Re-position the cross cursor to avoid flashing, and then show it 
             cross_cursor.point_to(closest_pivot.x, closest_pivot.y);
+            cross_cursor.render();
             cross_cursor.show();
         });
         // Whe the mouse is moving, the pivot chosen should follow the mouse, or the cross cursor
