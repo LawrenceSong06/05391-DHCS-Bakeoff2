@@ -176,7 +176,7 @@ class PivotRect extends Shape {
      * @param svg
      * @param rect
      */
-    bind(svg, rect) {
+    bind_pivots(svg, rect) {
         const side_length = rect.width();
         let rot = rect.transform().rotate % 90;
         rot = (rot < 0 ? 90 + rot : rot) / 180 * Math.PI;
@@ -317,17 +317,12 @@ window.addEventListener("load", (e) => {
     // And applicationElements.box is the box itself. :) You can change it with any of the things at https://svgjs.dev/docs/3.2/manipulating/
     let box = applicationElements.box;
     box.fill("#11eaea");
+    box.size(defaultSquarePosition.size);
+    box.transform({ position: defaultSquarePosition.location, rotate: defaultSquarePosition.rotation });
     // Reinterpretate the box as a "pivot box" (a box defined by two pivots)
     let pivot_box = new PivotRect(box);
     // Setting the default transformation of `box`
-    pivot_box.pivot1_coord = {
-        x: defaultSquarePosition.location.x,
-        y: defaultSquarePosition.location.y - defaultSquarePosition.size / 2
-    };
-    pivot_box.pivot2_coord = {
-        x: defaultSquarePosition.location.x,
-        y: defaultSquarePosition.location.y + defaultSquarePosition.size / 2
-    };
+    pivot_box.bind_pivots(svg, box);
     pivot_box.render();
     // ====== Manipulating them =============
     // ====== SVG element events =============
@@ -388,11 +383,11 @@ window.addEventListener("load", (e) => {
     // trial.on(eventName, callback) will allow you to register a callback (handler) to any of the above.
     trial.addEventListener("start", () => {
         console.log("starting!");
-        pivot_box.bind(svg, box);
+        pivot_box.bind_pivots(svg, box);
     });
     // Lastly, trial.getTaskNumber() will return the number (integer) of the current task
     trial.addEventListener("newTask", () => {
         console.log(trial.getTaskNumber());
-        pivot_box.bind(svg, box);
+        pivot_box.bind_pivots(svg, box);
     });
 });
