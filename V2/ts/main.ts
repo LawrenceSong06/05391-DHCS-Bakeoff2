@@ -213,7 +213,7 @@ class PivotRect extends Shape {
 	 * @param svg 
 	 * @param rect 
 	 */
-	public bind_pivots(svg : svgdotjs.Svg, rect : svgdotjs.Rect){
+	public bind_pivots_to(svg : svgdotjs.Svg, rect : svgdotjs.Rect){
 		const side_length = rect.width() as number;
 		let rot = rect.transform().rotate % 90;
 		rot = (rot < 0 ? 90 + rot : rot) / 180 * Math.PI;
@@ -398,7 +398,7 @@ window.addEventListener("load", (e: Event) => {
 	let pivot_box = new PivotRect(box);
 	
 	// Setting the default transformation of `box`
-	pivot_box.bind_pivots(svg, box);
+	pivot_box.bind_pivots_to(svg, box);
 	pivot_box.render();
 
 	// ====== Manipulating them =============
@@ -478,12 +478,12 @@ window.addEventListener("load", (e: Event) => {
 
 	trial.addEventListener("start", () => {
 		console.log("starting!");
-		pivot_box.bind_pivots(svg, box);
+		pivot_box.bind_pivots_to(svg, box);
 	});
 	
 	// Lastly, trial.getTaskNumber() will return the number (integer) of the current task
 	trial.addEventListener("newTask", () => {
 		console.log(trial.getTaskNumber());
-		pivot_box.bind_pivots(svg, box);
+		pivot_box.bind_pivots_to(svg, box);
 	});
 });
