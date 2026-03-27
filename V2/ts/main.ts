@@ -144,13 +144,16 @@ class Point{
 	}
 }
 
+abstract class Renderable {
+	public abstract render() : void;
+}
+
 /**
  * Shape Abstract Class
  * A "Shape" is anything that can be rendered in svg canvas
  */
-abstract class Shape {
+abstract class Shape extends Renderable{
 	public abstract set color(color: string);
-	public abstract render() : void;
 }
 
 /**
@@ -289,10 +292,10 @@ class CrossCursor extends Cursor {
 	 * @param svg 
 	 * @param color 
 	 */
-	constructor(svg : svgdotjs.Svg){
+	constructor(svg : svgdotjs.Svg, length = 2*canvasSize){
 		super();
-		this.cursor_hori = svg.line([[0, 0], [2*canvasSize, 0]]).fill("none").stroke("#000000");
-		this.cursor_verti = svg.line([[0, 0], [0, 2*canvasSize]]).fill("none").stroke("#000000");
+		this.cursor_hori = svg.line([[0, 0], [length, 0]]).fill("none").stroke("#000000");
+		this.cursor_verti = svg.line([[0, 0], [0, length]]).fill("none").stroke("#000000");
 	}
 
 	public set color(color: string) {
@@ -303,8 +306,8 @@ class CrossCursor extends Cursor {
 	public render(){
 		this.cursor_hori.stroke(this.color);
 		this.cursor_verti.stroke(this.color);
-		this.cursor_hori.transform({position:{x: 0, y: this.y}, origin: "center"});
-		this.cursor_verti.transform({position:{x: this.x, y: 0}, origin: "center"});
+		this.cursor_hori.transform({position:{x: this.x, y: this.y}, origin: "center"});
+		this.cursor_verti.transform({position:{x: this.x, y: this.y}, origin: "center"});
 	}
 
 	public hide(){
@@ -315,6 +318,74 @@ class CrossCursor extends Cursor {
 	public show(){
 		this.cursor_hori.opacity(1);
 		this.cursor_verti.opacity(1);
+	}
+}
+
+/**
+ * A Group is all Shapes that are rendered together with some rules
+ */
+class Group extends Renderable{
+	/**
+	 * A Group can have 2 callbacks: 
+	 *  - before_render: things to be done before this group is rendered
+	 *  - after_render: things to be done after this group is rendered
+	 * @default no-op
+	 */
+	private callbacks = {
+		before_render: ()=>{},
+		after_render: ()=>{}
+	};
+
+	/**
+	 * A list of user defined actions to this group that can be retrieved later
+	 */
+	private actions : ((object)=>{})[] = [];
+
+	// All shapes in this group
+	private shapes : Shape[];
+
+	/**
+	 * @param shapes shapes to be grouped
+	 */
+	constructor(shapes : Shape[]){
+		super();
+		this.shapes = shapes;
+	}
+
+	public set before_render(f : () => void){
+		this.callbacks.before_render = f;
+	}
+	
+	public set after_render(f : () => void){
+		this.callbacks.after_render = f;
+	}
+
+	/**
+	 * @description add an action to this group
+	 * @param action_name the name of the action, which will be used later to retrieve it
+	 * @param action the action function
+	 */
+	public add_action(action_name : string, action : (object) => void){
+		this.actions[action_name] = action;
+	}
+
+	/**
+	 * @description retrieves a previously defined action
+	 * @param action_name 
+	 * @returns function associoated with `action_name`
+	 */
+	public action(action_name : string){
+		return this.actions[action_name];
+	}
+
+	public render(): void {
+		this.callbacks.before_render();
+
+		this.shapes.map((x)=>{
+			x.render();
+		});
+
+		this.callbacks.after_render();
 	}
 }
 
@@ -338,7 +409,7 @@ window.addEventListener("load", (e: Event) => {
 	toolbar.style.flex = "1";
 	toolbar.style.width = "100%";
 	appArea.appendChild(toolbar);
-	
+
 	let submitButton : HTMLButtonElement = document.createElement("button");
 	submitButton.innerText = "yes, that looks good";
 	toolbar.appendChild(submitButton);
@@ -386,30 +457,64 @@ window.addEventListener("load", (e: Event) => {
 	let cross_cursor : CrossCursor = new CrossCursor(svg);
 	cross_cursor.color = "#ff0000";
 	cross_cursor.hide();
-
-
+	
 	// And applicationElements.box is the box itself. :) You can change it with any of the things at https://svgjs.dev/docs/3.2/manipulating/
 	let box : svgdotjs.Rect = applicationElements.box;
 	box.fill("#11eaea");
 	box.size(defaultSquarePosition.size);
 	box.transform({position: defaultSquarePosition.location, rotate: defaultSquarePosition.rotation});
-
+	
 	// Reinterpretate the box as a "pivot box" (a box defined by two pivots)
 	let pivot_box = new PivotRect(box);
 	
 	// Setting the default transformation of `box`
 	pivot_box.bind_pivots_to(svg, box);
-	pivot_box.render();
+
+	// Creating the following pivot cursors
+	let pivot1_cross  = new CrossCursor(svg, 10);
+	let pivot2_cross = new CrossCursor(svg, 10);
+	pivot1_cross.color = "#3c00ff"
+	pivot2_cross.color = "#3c00ff"
+
+	// These shapes should be rendered together, and thus they should be a group
+	let box_group = new Group([pivot_box, pivot1_cross, pivot2_cross]);
+
+	// Before rending, the two pivot_crosses should follow the box
+	box_group.before_render = function(){
+		pivot1_cross.point_to(pivot_box.pivot1.x, pivot_box.pivot1.y);
+		pivot2_cross.point_to(pivot_box.pivot2.x, pivot_box.pivot2.y);
+	}
+	
+	// Define a new action that highlights the cross nearest to the pointer
+	box_group.add_action("highlight_nearest_cross", ({x, y})=>{
+		const P = new Point(x, y);
+		const closer = P.closest([pivot_box.pivot1, pivot_box.pivot2]);
+		if(closer == pivot_box.pivot1){
+			pivot1_cross.color = "#ff0000"
+			pivot2_cross.color = "#3c00ff"
+		}else{
+			pivot2_cross.color = "#ff0000"
+			pivot1_cross.color = "#3c00ff"
+		}
+	});
+	box_group.render();
+	
+	// On every mousemove, update the color of each pivot_crosses
+	document.addEventListener("mousemove", (e : MouseEvent)=>{
+		if(document.pointerLockElement === null){
+			box_group.action("highlight_nearest_cross")({x: cursor_position.x, y: cursor_position.y});
+		}
+	});
 
 	// ====== Manipulating them =============
-
 	
-
+	
+	
 
 	// ====== SVG element events =============
 	// You can also add event handlers to svg elements. The syntax is similar (but not identical, unfortunately) to the baseline HTML event handlers: https://svgjs.dev/docs/3.2/events/#element-on
-
-
+	
+	
 	// ====== Dragging elements =============
 	// Because the "draggable" plugin is included, you can also set any svg element (shapee or group) to "draggable" -- this does exactly what you hope it does (i.e., it makes it so that you can click and drag the element). 
 	// Documentation here: https://github.com/svgdotjs/svg.draggable.js ... but it really is just this:
@@ -457,7 +562,7 @@ window.addEventListener("load", (e: Event) => {
 
 				// set the pivot position and re-render the box
 				closest_pivot.coord = {x: cross_cursor.x, y: cross_cursor.y};
-				pivot_box.render();	
+				box_group.render();
 			}
 		});
 
@@ -479,11 +584,13 @@ window.addEventListener("load", (e: Event) => {
 	trial.addEventListener("start", () => {
 		console.log("starting!");
 		pivot_box.bind_pivots_to(svg, box);
+		box_group.render();
 	});
 	
 	// Lastly, trial.getTaskNumber() will return the number (integer) of the current task
 	trial.addEventListener("newTask", () => {
 		console.log(trial.getTaskNumber());
 		pivot_box.bind_pivots_to(svg, box);
+		box_group.render();
 	});
 });
