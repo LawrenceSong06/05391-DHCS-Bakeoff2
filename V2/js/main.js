@@ -120,11 +120,13 @@ class Point {
         return P.subtract(this).angle;
     }
 }
+class Renderable {
+}
 /**
  * Shape Abstract Class
  * A "Shape" is anything that can be rendered in svg canvas
  */
-class Shape {
+class Shape extends Renderable {
 }
 /**
  * This is an interpretation of svgdotjs.Rect
@@ -176,7 +178,7 @@ class PivotRect extends Shape {
      * @param svg
      * @param rect
      */
-    bind_pivots(svg, rect) {
+    bind_pivots_to(svg, rect) {
         const side_length = rect.width();
         let rot = rect.transform().rotate % 90;
         rot = (rot < 0 ? 90 + rot : rot) / 180 * Math.PI;
@@ -234,10 +236,10 @@ class CrossCursor extends Cursor {
      * @param svg
      * @param color
      */
-    constructor(svg) {
+    constructor(svg, length = 2 * canvasSize) {
         super();
-        this.cursor_hori = svg.line([[0, 0], [2 * canvasSize, 0]]).fill("none").stroke("#000000");
-        this.cursor_verti = svg.line([[0, 0], [0, 2 * canvasSize]]).fill("none").stroke("#000000");
+        this.cursor_hori = svg.line([[0, 0], [length, 0]]).fill("none").stroke("#000000");
+        this.cursor_verti = svg.line([[0, 0], [0, length]]).fill("none").stroke("#000000");
     }
     set color(color) {
         this.cursor_hori.stroke(color);
@@ -246,8 +248,8 @@ class CrossCursor extends Cursor {
     render() {
         this.cursor_hori.stroke(this.color);
         this.cursor_verti.stroke(this.color);
-        this.cursor_hori.transform({ position: { x: 0, y: this.y }, origin: "center" });
-        this.cursor_verti.transform({ position: { x: this.x, y: 0 }, origin: "center" });
+        this.cursor_hori.transform({ position: { x: this.x, y: this.y }, origin: "center" });
+        this.cursor_verti.transform({ position: { x: this.x, y: this.y }, origin: "center" });
     }
     hide() {
         this.cursor_hori.opacity(0);
@@ -256,6 +258,61 @@ class CrossCursor extends Cursor {
     show() {
         this.cursor_hori.opacity(1);
         this.cursor_verti.opacity(1);
+    }
+}
+/**
+ * A Group is all Shapes that are rendered together with some rules
+ */
+class Group extends Renderable {
+    /**
+     * @param shapes shapes to be grouped
+     */
+    constructor(shapes) {
+        super();
+        /**
+         * A Group can have 2 callbacks:
+         *  - before_render: things to be done before this group is rendered
+         *  - after_render: things to be done after this group is rendered
+         * @default no-op
+         */
+        this.callbacks = {
+            before_render: () => { },
+            after_render: () => { }
+        };
+        /**
+         * A list of user defined actions to this group that can be retrieved later
+         */
+        this.actions = [];
+        this.shapes = shapes;
+    }
+    set before_render(f) {
+        this.callbacks.before_render = f;
+    }
+    set after_render(f) {
+        this.callbacks.after_render = f;
+    }
+    /**
+     * @description add an action to this group
+     * @param action_name the name of the action, which will be used later to retrieve it
+     * @param action the action function
+     */
+    add_action(action_name, action) {
+        this.actions[action_name] = action;
+    }
+    /**
+     * @description retrieves a previously defined action
+     * @param action_name
+     * @returns function associoated with `action_name`
+     */
+    action(action_name) {
+        return this.actions[action_name];
+    }
+    render() {
+        this.callbacks.before_render();
+        this.shapes.map((x) => {
+            x.render();
+        });
+        this.callbacks.after_render();
     }
 }
 // As before, we add our parts within a "load" event to make sure the HTML stuff has loaded first. 
@@ -322,8 +379,39 @@ window.addEventListener("load", (e) => {
     // Reinterpretate the box as a "pivot box" (a box defined by two pivots)
     let pivot_box = new PivotRect(box);
     // Setting the default transformation of `box`
-    pivot_box.bind_pivots(svg, box);
-    pivot_box.render();
+    pivot_box.bind_pivots_to(svg, box);
+    // Creating the following pivot cursors
+    let pivot1_cross = new CrossCursor(svg, 10);
+    let pivot2_cross = new CrossCursor(svg, 10);
+    pivot1_cross.color = "#3c00ff";
+    pivot2_cross.color = "#3c00ff";
+    // These shapes should be rendered together, and thus they should be a group
+    let box_group = new Group([pivot_box, pivot1_cross, pivot2_cross]);
+    // Before rending, the two pivot_crosses should follow the box
+    box_group.before_render = function () {
+        pivot1_cross.point_to(pivot_box.pivot1.x, pivot_box.pivot1.y);
+        pivot2_cross.point_to(pivot_box.pivot2.x, pivot_box.pivot2.y);
+    };
+    // Define a new action that highlights the cross nearest to the pointer
+    box_group.add_action("highlight_nearest_cross", ({ x, y }) => {
+        const P = new Point(x, y);
+        const closer = P.closest([pivot_box.pivot1, pivot_box.pivot2]);
+        if (closer == pivot_box.pivot1) {
+            pivot1_cross.color = "#ff0000";
+            pivot2_cross.color = "#3c00ff";
+        }
+        else {
+            pivot2_cross.color = "#ff0000";
+            pivot1_cross.color = "#3c00ff";
+        }
+    });
+    box_group.render();
+    // On every mousemove, update the color of each pivot_crosses
+    document.addEventListener("mousemove", (e) => {
+        if (document.pointerLockElement === null) {
+            box_group.action("highlight_nearest_cross")({ x: cursor_position.x, y: cursor_position.y });
+        }
+    });
     // ====== Manipulating them =============
     // ====== SVG element events =============
     // You can also add event handlers to svg elements. The syntax is similar (but not identical, unfortunately) to the baseline HTML event handlers: https://svgjs.dev/docs/3.2/events/#element-on
@@ -365,7 +453,7 @@ window.addEventListener("load", (e) => {
                 cross_cursor.render();
                 // set the pivot position and re-render the box
                 closest_pivot.coord = { x: cross_cursor.x, y: cross_cursor.y };
-                pivot_box.render();
+                box_group.render();
             }
         });
         // When mouse is up, we should "release" pivot point, and hide the cross cursor
@@ -383,11 +471,13 @@ window.addEventListener("load", (e) => {
     // trial.on(eventName, callback) will allow you to register a callback (handler) to any of the above.
     trial.addEventListener("start", () => {
         console.log("starting!");
-        pivot_box.bind_pivots(svg, box);
+        pivot_box.bind_pivots_to(svg, box);
+        box_group.render();
     });
     // Lastly, trial.getTaskNumber() will return the number (integer) of the current task
     trial.addEventListener("newTask", () => {
         console.log(trial.getTaskNumber());
-        pivot_box.bind_pivots(svg, box);
+        pivot_box.bind_pivots_to(svg, box);
+        box_group.render();
     });
 });
