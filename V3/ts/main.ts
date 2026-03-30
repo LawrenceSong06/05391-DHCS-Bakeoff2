@@ -9,6 +9,10 @@ const tasksLength = 10;
 // Documentation on the "draggable" SVG.js plugin is here:
 // https://github.com/svgdotjs/svg.draggable.js
 
+/*
+ * ============= Helper Functions =============
+ */ 
+
 // Defining a higher-order function "bound" that creates a "bounding" function
 // this function can be used conveniently in the future when we are bounding
 // a number. e.g. we do not want anything to go outside of the canvas, so we can call
@@ -38,6 +42,24 @@ function bound(lower : number, upper : number) {
 		};
 
 	return res;
+}
+
+function is_active(element : HTMLElement) : boolean{
+	return element.classList.contains("active");
+}
+
+function make_active(element : HTMLElement) : void{
+	if (is_active(element)){
+		return;
+	};
+	element.classList.add("active");
+}
+
+function make_inactive(element : HTMLElement) : void{
+	if (!is_active(element)){
+		return;
+	}
+	element.classList.remove("active");
 }
 
 /**
@@ -142,6 +164,19 @@ class Point{
 	public angle_between(P : Point) {
 		return P.subtract(this).angle;
 	}
+
+	// Some static methods
+	/**
+	 * @description Calculate the mid point of two points
+	 * @param P
+	 * @param Q 
+	 * @returns mid point of P and Q 
+	 */
+	static mid(P : Point, Q : Point) : Point{
+		let x = (P.x + Q.x)/2;
+		let y = (P.y + Q.y)/2;
+		return new Point(x, y);	
+	}
 }
 
 abstract class Renderable {
@@ -154,6 +189,8 @@ abstract class Renderable {
  */
 abstract class Shape extends Renderable{
 	public abstract set color(color: string);
+	public abstract hide() : void;
+	public abstract show() : void;
 }
 
 /**
@@ -238,6 +275,14 @@ class PivotRect extends Shape {
 		this.rect.size(size, size);
 		this.rect.transform({position: position, rotate: rotation, origin: "top left"})
 	}
+
+	public hide(): void {
+		this.rect.opacity(0);
+	}
+	
+	public show(): void {
+		this.rect.opacity(1);
+	}
 }
 
 /**
@@ -272,8 +317,6 @@ abstract class Cursor extends Shape {
 	};
 
 	public abstract render() : void;
-	public abstract hide() : void;
-	public abstract show() : void;
 }
 
 /**
@@ -404,24 +447,6 @@ window.addEventListener("load", (e: Event) => {
 	// Within the "trackpad + click" constraints, this can be whatever you want it to be (e.g. a button, some kind of swipe gesture, double-clicking on the square itself...). Consider what you've learned about Fitts's Law. :)
 	// Here is a bare version, just using an HTML button:
 	let appArea = document.getElementById("applicationArea");
-	
-	let toolbar : HTMLDivElement = document.createElement("div");
-	toolbar.style.flex = "1";
-	toolbar.style.width = "100%";
-	toolbar.style.display = "flex";
-	toolbar.style.flexDirection = "row-reverse";
-	appArea.appendChild(toolbar);
-
-	let submitButton : HTMLButtonElement = document.createElement("button");
-	submitButton.innerText = "Submit";
-	submitButton.style.background = "#9cf291";
-	submitButton.style.height = "80px";
-	submitButton.style.width = "200px";
-	toolbar.appendChild(submitButton);
-	
-	submitButton.addEventListener("click", (e: PointerEvent) => {
-		trial.submitPosition();
-	})
 	// =========== /end required =========== 
 
 	// ====== Getting the manipulable elements =============
@@ -440,19 +465,107 @@ window.addEventListener("load", (e: Event) => {
 
 	// applicationElements.grid is the svg group containing the lines drawn in the background.
 	let grid : svgdotjs.G = applicationElements.grid;
-	svg.line(canvasSize/2, 0, canvasSize/2, canvasSize).stroke("#000000").opacity(1);
-	// You could add other background-y things to this group. You also may remove the grid lines with grid.clear() (but I can't personally think of a good reason why you would want to?).
+	// Enhancing all lines associated with multiples of 1/4 canvasSize.
+	// those lines will have higher opacity
+	for(let i = 1; i < 4; i++){
+		const opacity = 0.8 - Math.abs(2-i)/3;
+		svg.line(canvasSize*i/4, 0, canvasSize*i/4, canvasSize).stroke("#000000").opacity(opacity).back();
+		svg.line(0, canvasSize*i/4, canvasSize, canvasSize*i/4).stroke("#000000").opacity(opacity).back();
+	}
 
 	// =========== Constants ==============
 	// This is the bounding function that bounds a coordinate in the svg canvas
 	const canvasBound = bound(0, canvasSize);
+	const regular_view_box = {x: 0, y: 0, width: canvasSize, height: canvasSize};
 
-	// =========== Variables ==============
+	// ========== Some Global Variables ==============
+	let current_viewbox = {x: 0, y: 0, width: canvasSize, height: canvasSize};
+	
+	// The system status enum. This will be later used to find 
+	// what functionality the user is using
+	enum SystemStatus {
+		regular, // user is adjusting the pivots
+		zooming // user is selecting zoom in area
+	};
+	let system_status : SystemStatus = SystemStatus.regular;
+	
 	// This is the live position of the actual cursor in the svg canvas
 	// It is activly updating to current position of the actual cursor 
 	let cursor_position : Point = new Point(0, 0);
 	svg.node.addEventListener("mousemove", (e : MouseEvent) => {
-		cursor_position.coord = {x: e.offsetX, y: e.offsetY};
+		let zoom_ratio = current_viewbox.width / canvasSize;
+		cursor_position.coord = {x: current_viewbox.x + e.offsetX * zoom_ratio, y: current_viewbox.y + e.offsetY * zoom_ratio};
+	});
+
+	// The mouse rate is the factor used to adjust mouse speed when adjusting
+	// pivots
+	let mouse_rate = 1;
+
+	// The tool bar. This is the area where all buttons will be placed.
+	let toolbar : HTMLDivElement = document.createElement("div");
+	// We want to horizontally list all these buttons
+	toolbar.style.flex = "1";
+	toolbar.style.width = "100%";
+	toolbar.style.display = "flex";
+	toolbar.style.flexDirection = "row-reverse";
+	toolbar.style.gap = "5px";
+	appArea.appendChild(toolbar);
+
+	// The submit button
+	let submitButton : HTMLButtonElement = document.createElement("button");
+	submitButton.id = "submit";
+	submitButton.innerText = "Submit";
+	toolbar.appendChild(submitButton);
+	
+	submitButton.addEventListener("click", (e: PointerEvent) => {
+		send_message("Yeah!")
+		trial.submitPosition();
+	})
+
+	// A message area telling user what is happening in the system
+	let message_box : HTMLDivElement = document.createElement("div");
+	message_box.id = "message";
+	
+	let send_message = (msg : string) => {message_box.innerText = msg};
+	send_message("You've got this!");
+
+	// The zoom button
+	let zoom : HTMLButtonElement = document.createElement("button");
+	zoom.id = "zoom"
+	toolbar.appendChild(zoom);
+	toolbar.appendChild(message_box);
+	
+	// The selected zoom in are is the box used to highlight the chosen
+	// zooming in area
+	let selected_zoom_in_area = svg.rect(10,10).fill("#c9ffc898");
+	let zoom_in_area_box = new PivotRect(selected_zoom_in_area);
+	zoom_in_area_box.hide();
+
+	zoom.addEventListener("click", ()=>{
+		if(is_active(zoom)){
+			make_inactive(zoom);
+			if(system_status == SystemStatus.zooming){
+				zoom_in_area_box.hide();
+
+				system_status = SystemStatus.regular;
+
+				send_message("Cancelled.");
+			}else {
+				current_viewbox = regular_view_box;
+				svg.viewbox(current_viewbox);
+
+				mouse_rate = 1;
+
+				send_message("Zoomed out.");
+			}
+		}else{
+			zoom_in_area_box.show();
+
+			make_active(zoom);
+			system_status = SystemStatus.zooming;
+
+			send_message("Please select an area.")
+		}
 	});
 
 	// =========== Custom Cursor ==========
@@ -480,8 +593,10 @@ window.addEventListener("load", (e: Event) => {
 	// Creating the following pivot cursors
 	let pivot1_cross  = new CrossCursor(svg, 10);
 	let pivot2_cross = new CrossCursor(svg, 10);
+	let center_cross = new CrossCursor(svg, 10);
 	pivot1_cross.color = "#3c00ff"
 	pivot2_cross.color = "#3c00ff"
+	center_cross.color = "#3c00ff"
 
 	// These shapes should be rendered together, and thus they should be a group
 	let box_group = new Group([pivot_box, pivot1_cross, pivot2_cross]);
@@ -490,44 +605,109 @@ window.addEventListener("load", (e: Event) => {
 	box_group.before_render = function(){
 		pivot1_cross.point_to(pivot_box.pivot1.x, pivot_box.pivot1.y);
 		pivot2_cross.point_to(pivot_box.pivot2.x, pivot_box.pivot2.y);
+
+		const mid = Point.mid(pivot_box.pivot1, pivot_box.pivot2) 
+		center_cross.point_to(mid.x, mid.y);
 	}
 	
 	// Define a new action that highlights the cross nearest to the pointer
 	box_group.add_action("highlight_nearest_cross", ({x, y})=>{
 		const P = new Point(x, y);
-		const closer = P.closest([pivot_box.pivot1, pivot_box.pivot2]);
-		if(closer == pivot_box.pivot1){
-			pivot1_cross.color = "#ff0000"
-			pivot2_cross.color = "#3c00ff"
+		const closest = P.closest([pivot_box.pivot1, pivot_box.pivot2, Point.mid(pivot_box.pivot1, pivot_box.pivot2)]);
+		if(closest == pivot_box.pivot1){
+			pivot1_cross.color = "#ff0000";
+			pivot2_cross.color = "#3c00ff";
+			center_cross.color = "#3c00ff";
+		}else if(closest == pivot_box.pivot2){
+			pivot2_cross.color = "#ff0000";
+			pivot1_cross.color = "#3c00ff";
+			center_cross.color = "#3c00ff";
 		}else{
-			pivot2_cross.color = "#ff0000"
-			pivot1_cross.color = "#3c00ff"
+			pivot2_cross.color = "#3c00ff";
+			pivot1_cross.color = "#3c00ff";
+			center_cross.color = "#ff0000";
 		}
 	});
 	box_group.render();
 	
 	// On every mousemove, update the color of each pivot_crosses
 	document.addEventListener("mousemove", (e : MouseEvent)=>{
+		if(system_status != SystemStatus.regular){
+			return;
+		}
+
 		if(document.pointerLockElement === null){
 			box_group.action("highlight_nearest_cross")({x: cursor_position.x, y: cursor_position.y});
 		}
 	});
 
-	// ====== Manipulating them =============
-	
-	
-	
 
 	// ====== SVG element events =============
 	// You can also add event handlers to svg elements. The syntax is similar (but not identical, unfortunately) to the baseline HTML event handlers: https://svgjs.dev/docs/3.2/events/#element-on
-	
+
+	/**
+	 * This code block is associated with zoom-in tool.
+	 * The expected behavior is:
+	 * - when user activated zoom-in, they will need to choose an area to zoom-in
+	 * - there will be 64 zoom-in square areas, each containing 4 chunks of 1/4 canvasSize blocks.
+	 * - the zoom-in block whose center is nearest to user's cursor will be selected.
+	 * - when user presses their mouse button, we will zoom in into the chosen area.
+	 */
+	{
+		// Computing the centers of zoom in areas
+		const area_diameter = 1/8 * canvasSize;
+		let zoom_in_area_centers = [];
+		{
+			const step_length = 1/8*canvasSize;
+			for(let i = 1; i < 8; i++){
+				for(let j = 1; j < 8; j++){
+					const x = step_length*i;
+					const y = step_length*j;
+					zoom_in_area_centers.push(new Point(x, y));
+				}
+			}
+		}
+
+		// Highlight the selected zoom-in area to hint the user
+		svg.node.addEventListener("mousemove", ()=>{
+			if(system_status != SystemStatus.zooming) {
+				return;
+			}
+
+			const closest = cursor_position.closest(zoom_in_area_centers);
+			let [x1, y1] = [closest.x - area_diameter, closest.y - area_diameter];
+			let [x2, y2] = [closest.x + area_diameter, closest.y + area_diameter];
+			zoom_in_area_box.pivot1_coord = {x: x1, y: y1};
+			zoom_in_area_box.pivot2_coord = {x: x2, y: y2};
+			zoom_in_area_box.render();
+		});
+
+
+		svg.node.addEventListener("mousedown", ()=>{
+			if(system_status != SystemStatus.zooming) {
+				return;
+			}
+
+			let [x, y, s] = [zoom_in_area_box.pivot1.x - 5, zoom_in_area_box.pivot1.y - 5, zoom_in_area_box.side_length + 10];
+			mouse_rate = s / canvasSize;
+			
+			current_viewbox = {x, y, width: s, height: s};
+			svg.viewbox(current_viewbox);
+
+
+			send_message("Zoomed in.");
+			zoom_in_area_box.hide();
+			system_status = SystemStatus.regular;
+		});
+	}
+
 	
 	// ====== Dragging elements =============
 	// Because the "draggable" plugin is included, you can also set any svg element (shapee or group) to "draggable" -- this does exactly what you hope it does (i.e., it makes it so that you can click and drag the element). 
 	// Documentation here: https://github.com/svgdotjs/svg.draggable.js ... but it really is just this:
 
 	/**
-	 * This code block if for the "dragging" behavior of box
+	 * This code block if for the "dragging" behavior of box pivots
 	 * 
 	 * The pivot of `box` closest to cursor's position when the dragging starts 
 	 * will be chosen to be adjusted
@@ -544,6 +724,10 @@ window.addEventListener("load", (e: Event) => {
 		// When the mouse is pressed down, at any position, 
 		// the closest pivot to the user's cursor is "chosen" to be adjusted
 		svg.node.addEventListener("mousedown",(e : PointerEvent)=>{
+			if(system_status != SystemStatus.regular){
+				return;
+			}
+
 			box.node.requestPointerLock();
 
 			// Set the `closest_pivot` so
@@ -558,12 +742,16 @@ window.addEventListener("load", (e: Event) => {
 		
 		// Whe the mouse is moving, the pivot chosen should follow the mouse, or the cross cursor
 		document.addEventListener("mousemove", (e : MouseEvent) => {
+			if(system_status != SystemStatus.regular) {
+				return;
+			}
+
 			// We should only do all these when we are indeed adjusting the box
 			if(document.pointerLockElement === box.node) {
 				// bound cross cursor's position in canvasBound, so that is does not go out of the canvas
 				cross_cursor.point_to(
-					canvasBound(cross_cursor.x + e.movementX), 
-					canvasBound(cross_cursor.y + e.movementY)
+					canvasBound(cross_cursor.x + e.movementX * mouse_rate), 
+					canvasBound(cross_cursor.y + e.movementY * mouse_rate)
 				);
 				cross_cursor.render();
 

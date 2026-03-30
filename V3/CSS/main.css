@@ -1,0 +1,41 @@
+/*Any student-written CSS should go in this file.*/
+#submit{
+    background: #9cf291;
+    height: 80px;
+    width: 200px;
+    font-size: 2em;
+}
+
+#submit:hover{
+    box-shadow: 0 0 5px #00000090;
+}
+
+#submit:active{
+    box-shadow: inset 0 0 5px #000000c3;
+}
+
+#zoom{
+    min-width: 200px;
+    font-size: 2em;
+}
+
+#zoom::before{
+    content: "(+)";
+    font-weight: bold;
+}
+#zoom::after{
+    content: " Zoom In";
+}
+
+#zoom.active::before{
+    content: "(-)";
+    font-weight: bold;
+}
+#zoom.active::after{
+    content: " Zoom Out";
+}
+
+#message{
+    flex: 1;
+    height: 80px;
+}
