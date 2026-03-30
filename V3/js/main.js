@@ -173,6 +173,7 @@ class PivotRect extends Shape {
         super();
         this.pivot1 = new Point(0, 0);
         this.pivot2 = new Point(0, 0);
+        this.center = new Point(0, 0);
         this.rect = rect;
     }
     set color(color) {
@@ -184,6 +185,7 @@ class PivotRect extends Shape {
      */
     set pivot1_coord({ x = 0, y = 0 }) {
         this.pivot1.coord = { x: x, y: y };
+        this.center = Point.mid(this.pivot1, this.pivot2);
     }
     /**
      * @description Sets the `x` and `y` of `pivot2`
@@ -191,6 +193,18 @@ class PivotRect extends Shape {
      */
     set pivot2_coord({ x = 0, y = 0 }) {
         this.pivot2.coord = { x: x, y: y };
+        this.center = Point.mid(this.pivot1, this.pivot2);
+    }
+    /**
+     * @description Sets the `x` and `y` of `center`
+     * @param {x, y}
+     */
+    set center_coord({ x = 0, y = 0 }) {
+        let dx = x - this.center.x;
+        let dy = y - this.center.y;
+        this.pivot1.coord = { x: this.pivot1.x + dx, y: this.pivot1.y + dy };
+        this.pivot2.coord = { x: this.pivot2.x + dx, y: this.pivot2.y + dy };
+        this.center.coord = { x, y };
     }
     /**
      * @returns the side_length of the rectangle
@@ -219,6 +233,7 @@ class PivotRect extends Shape {
         const pivot2 = pivot1.add(center.subtract(pivot1).scale(2));
         this.pivot1_coord = { x: pivot1.x, y: pivot1.y };
         this.pivot2_coord = { x: pivot2.x, y: pivot2.y };
+        this.center = Point.mid(pivot1, pivot2);
     }
     render() {
         const size = this.side_length;
@@ -492,18 +507,17 @@ window.addEventListener("load", (e) => {
     pivot2_cross.color = "#3c00ff";
     center_cross.color = "#3c00ff";
     // These shapes should be rendered together, and thus they should be a group
-    let box_group = new Group([pivot_box, pivot1_cross, pivot2_cross]);
+    let box_group = new Group([pivot_box, pivot1_cross, pivot2_cross, center_cross]);
     // Before rending, the two pivot_crosses should follow the box
     box_group.before_render = function () {
         pivot1_cross.point_to(pivot_box.pivot1.x, pivot_box.pivot1.y);
         pivot2_cross.point_to(pivot_box.pivot2.x, pivot_box.pivot2.y);
-        const mid = Point.mid(pivot_box.pivot1, pivot_box.pivot2);
-        center_cross.point_to(mid.x, mid.y);
+        center_cross.point_to(pivot_box.center.x, pivot_box.center.y);
     };
     // Define a new action that highlights the cross nearest to the pointer
     box_group.add_action("highlight_nearest_cross", ({ x, y }) => {
         const P = new Point(x, y);
-        const closest = P.closest([pivot_box.pivot1, pivot_box.pivot2, Point.mid(pivot_box.pivot1, pivot_box.pivot2)]);
+        const closest = P.closest([pivot_box.pivot1, pivot_box.pivot2, pivot_box.center]);
         if (closest == pivot_box.pivot1) {
             pivot1_cross.color = "#ff0000";
             pivot2_cross.color = "#3c00ff";
@@ -605,7 +619,7 @@ window.addEventListener("load", (e) => {
             box.node.requestPointerLock();
             // Set the `closest_pivot` so
             // `mousemove` event can know which pivot are we updating 
-            closest_pivot = cursor_position.closest([pivot_box.pivot1, pivot_box.pivot2]);
+            closest_pivot = cursor_position.closest([pivot_box.pivot1, pivot_box.pivot2, pivot_box.center]);
             // Re-position the cross cursor to avoid flashing, and then show it 
             cross_cursor.point_to(closest_pivot.x, closest_pivot.y);
             cross_cursor.render();
@@ -622,7 +636,15 @@ window.addEventListener("load", (e) => {
                 cross_cursor.point_to(canvasBound(cross_cursor.x + e.movementX * mouse_rate), canvasBound(cross_cursor.y + e.movementY * mouse_rate));
                 cross_cursor.render();
                 // set the pivot position and re-render the box
-                closest_pivot.coord = { x: cross_cursor.x, y: cross_cursor.y };
+                if (closest_pivot === pivot_box.pivot1) {
+                    pivot_box.pivot1_coord = { x: cross_cursor.x, y: cross_cursor.y };
+                }
+                else if (closest_pivot === pivot_box.pivot2) {
+                    pivot_box.pivot2_coord = { x: cross_cursor.x, y: cross_cursor.y };
+                }
+                else {
+                    pivot_box.center_coord = { x: cross_cursor.x, y: cross_cursor.y };
+                }
                 box_group.render();
             }
         });
