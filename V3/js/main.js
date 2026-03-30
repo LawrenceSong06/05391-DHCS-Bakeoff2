@@ -460,6 +460,7 @@ window.addEventListener("load", (e) => {
     let selected_zoom_in_area = svg.rect(10, 10).fill("#c9ffc898");
     let zoom_in_area_box = new PivotRect(selected_zoom_in_area);
     zoom_in_area_box.hide();
+    // Zoom's onclick
     zoom.addEventListener("click", () => {
         if (is_active(zoom)) {
             make_inactive(zoom);
@@ -580,6 +581,7 @@ window.addEventListener("load", (e) => {
             zoom_in_area_box.pivot2_coord = { x: x2, y: y2 };
             zoom_in_area_box.render();
         });
+        // User selected zoom-in area
         svg.node.addEventListener("mousedown", () => {
             if (system_status != SystemStatus.zooming) {
                 return;
