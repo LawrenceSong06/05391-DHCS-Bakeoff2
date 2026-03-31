@@ -113,6 +113,17 @@ class Point{
 		return new Point(k*this.x, k*this.y);
 	}
 
+
+	/**
+	 * @description Rotating a point by a angle `theta`
+	 * @param theta
+	 * @returns `R(theta)` @ `this`
+	 */
+	public rotate(theta : number){
+		return new Point(this.x*Math.cos(theta)-this.y*Math.sin(theta),
+		 this.x*Math.sin(theta)+this.y*Math.cos(theta));
+	}
+
 	/**
 	 * @description Add two points
 	 * @param P 
@@ -201,6 +212,9 @@ class PivotRect extends Shape {
 	private rect : svgdotjs.Rect;
 	public pivot1 : Point;
 	public pivot2 : Point;
+	public pivot3 : Point;
+	public pivot4 : Point;
+
 	public center : Point;
 
 	// Binding an existing rect
@@ -212,6 +226,8 @@ class PivotRect extends Shape {
 		super();
 		this.pivot1 = new Point(0,0);
 		this.pivot2 = new Point(0,0);
+		this.pivot3 = new Point(0,0);
+		this.pivot4 = new Point(0,0);
 		this.center = new Point(0,0);
 		this.rect = rect; 
 	}
@@ -227,6 +243,8 @@ class PivotRect extends Shape {
 	public set pivot1_coord({x = 0, y = 0}){
 		this.pivot1.coord = {x: x, y: y};
 		this.center = Point.mid(this.pivot1, this.pivot2);
+		this.pivot3 = this.center.add(this.center.subtract(this.pivot1).rotate(-Math.PI/2))
+		this.pivot4 = this.center.add(this.center.subtract(this.pivot1).rotate(Math.PI/2))
 	}
 
 	/**
@@ -236,6 +254,31 @@ class PivotRect extends Shape {
 	public set pivot2_coord({x = 0, y = 0}){
 		this.pivot2.coord = {x: x, y: y};
 		this.center = Point.mid(this.pivot1, this.pivot2);
+		this.pivot3 = this.center.add(this.center.subtract(this.pivot1).rotate(-Math.PI/2))
+		this.pivot4 = this.center.add(this.center.subtract(this.pivot1).rotate(Math.PI/2))
+	}
+
+	/**
+	 * @description Sets the `x` and `y` of `pivot2`
+	 * @param {x, y}  
+	 */
+	public set pivot3_coord({x = 0, y = 0}){
+		this.pivot3.coord = {x: x, y: y};
+		this.center = Point.mid(this.pivot3, this.pivot4);
+		this.pivot1 = this.center.add(this.center.subtract(this.pivot3).rotate(-Math.PI/2))
+		this.pivot2 = this.center.add(this.center.subtract(this.pivot3).rotate(Math.PI/2))
+	}
+
+	/**
+	 * @description Sets the `x` and `y` of `pivot2`
+	 * @param {x, y}  
+	 */
+	public set pivot4_coord({x = 0, y = 0}){
+		this.pivot4.coord = {x: x, y: y};
+		this.center = Point.mid(this.pivot3, this.pivot4);
+		this.pivot1 = this.center.add(this.center.subtract(this.pivot3).rotate(-Math.PI/2))
+		this.pivot2 = this.center.add(this.center.subtract(this.pivot3).rotate(Math.PI/2))
+
 	}
 
 	/**
@@ -247,6 +290,9 @@ class PivotRect extends Shape {
 		let dy = y - this.center.y;
 		this.pivot1.coord = {x: this.pivot1.x + dx, y: this.pivot1.y + dy};
 		this.pivot2.coord = {x: this.pivot2.x + dx, y: this.pivot2.y + dy};
+		this.pivot3.coord = {x: this.pivot3.x + dx, y: this.pivot3.y + dy};
+		this.pivot4.coord = {x: this.pivot4.x + dx, y: this.pivot4.y + dy};
+
 		this.center.coord = {x, y};
 	}
 
@@ -278,9 +324,14 @@ class PivotRect extends Shape {
 		const pivot1 : Point = new Point(rect.rbox(svg).x + x_offset, rect.rbox(svg).y);
 		const center : Point = new Point(rect.rbox(svg).cx, rect.rbox(svg).cy);
 		const pivot2 : Point = pivot1.add(center.subtract(pivot1).scale(2));
+		const pivot3 : Point = center.add(center.subtract(pivot1).rotate(-Math.PI/2))
+		const pivot4 : Point = center.add(center.subtract(pivot1).rotate(Math.PI/2))
+
 
 		this.pivot1_coord = {x: pivot1.x, y: pivot1.y};
 		this.pivot2_coord = {x: pivot2.x, y: pivot2.y};
+		this.pivot3_coord = {x: pivot3.x, y: pivot3.y};
+		this.pivot4_coord = {x: pivot4.x, y: pivot4.y};
 		this.center = Point.mid(pivot1, pivot2);
 	}
 
@@ -611,37 +662,42 @@ window.addEventListener("load", (e: Event) => {
 	// Creating the following pivot cursors
 	let pivot1_cross  = new CrossCursor(svg, 10);
 	let pivot2_cross = new CrossCursor(svg, 10);
+	let pivot3_cross = new CrossCursor(svg, 10);
+	let pivot4_cross = new CrossCursor(svg, 10);
 	let center_cross = new CrossCursor(svg, 10);
 	pivot1_cross.color = "#3c00ff"
 	pivot2_cross.color = "#3c00ff"
+	pivot3_cross.color = "#3c00ff"
+	pivot4_cross.color = "#3c00ff"
 	center_cross.color = "#3c00ff"
 
 	// These shapes should be rendered together, and thus they should be a group
-	let box_group = new Group([pivot_box, pivot1_cross, pivot2_cross, center_cross]);
+	let box_group = new Group([pivot_box, pivot1_cross, pivot2_cross, pivot3_cross, pivot4_cross,center_cross]);
 
 	// Before rending, the two pivot_crosses should follow the box
 	box_group.before_render = function(){
 		pivot1_cross.point_to(pivot_box.pivot1.x, pivot_box.pivot1.y);
 		pivot2_cross.point_to(pivot_box.pivot2.x, pivot_box.pivot2.y);
+		pivot3_cross.point_to(pivot_box.pivot3.x, pivot_box.pivot3.y);
+		pivot4_cross.point_to(pivot_box.pivot4.x, pivot_box.pivot4.y);
 		center_cross.point_to(pivot_box.center.x, pivot_box.center.y);
 	}
 	
 	// Define a new action that highlights the cross nearest to the pointer
 	box_group.add_action("highlight_nearest_cross", ({x, y})=>{
 		const P = new Point(x, y);
-		const closest = P.closest([pivot_box.pivot1, pivot_box.pivot2, pivot_box.center]);
-		if(closest == pivot_box.pivot1){
-			pivot1_cross.color = "#ff0000";
-			pivot2_cross.color = "#3c00ff";
-			center_cross.color = "#3c00ff";
-		}else if(closest == pivot_box.pivot2){
-			pivot2_cross.color = "#ff0000";
-			pivot1_cross.color = "#3c00ff";
-			center_cross.color = "#3c00ff";
-		}else{
-			pivot2_cross.color = "#3c00ff";
-			pivot1_cross.color = "#3c00ff";
-			center_cross.color = "#ff0000";
+		const pivots = [pivot_box.pivot1,pivot_box.pivot2,pivot_box.pivot3,pivot_box.pivot4, pivot_box.center]
+		const crosses = [pivot1_cross, pivot2_cross, pivot3_cross, pivot4_cross, center_cross]
+		const closest = P.closest(pivots);
+		let selected_index = -1
+		for(let i=0;i<pivots.length;i++) {
+			if(closest == pivots[i]) {
+				selected_index = i
+				break
+			}
+		}
+		for(let i=0;i<pivots.length;i++) {
+			crosses[i].color = selected_index == i?"#ff0000":"#3c00ff"
 		}
 	});
 	box_group.render();
@@ -699,6 +755,7 @@ window.addEventListener("load", (e: Event) => {
 		});
 
 		// User selected zoom-in area
+
 		svg.node.addEventListener("mousedown", ()=>{
 			if(system_status != SystemStatus.zooming) {
 				return;
@@ -748,7 +805,7 @@ window.addEventListener("load", (e: Event) => {
 
 			// Set the `closest_pivot` so
 			// `mousemove` event can know which pivot are we updating 
-			closest_pivot = cursor_position.closest([pivot_box.pivot1, pivot_box.pivot2, pivot_box.center])
+			closest_pivot = cursor_position.closest([pivot_box.pivot1, pivot_box.pivot2, pivot_box.pivot3, pivot_box.pivot4, pivot_box.center])
 
 			// Re-position the cross cursor to avoid flashing, and then show it 
 			cross_cursor.point_to(closest_pivot.x, closest_pivot.y);
@@ -776,6 +833,10 @@ window.addEventListener("load", (e: Event) => {
 					pivot_box.pivot1_coord = {x: cross_cursor.x, y: cross_cursor.y};
 				}else if(closest_pivot === pivot_box.pivot2){
 					pivot_box.pivot2_coord = {x: cross_cursor.x, y: cross_cursor.y};
+				}else if(closest_pivot === pivot_box.pivot3){
+					pivot_box.pivot3_coord = {x: cross_cursor.x, y: cross_cursor.y};
+				}else if(closest_pivot === pivot_box.pivot4){
+					pivot_box.pivot4_coord = {x: cross_cursor.x, y: cross_cursor.y};
 				}else{
 					pivot_box.center_coord = {x: cross_cursor.x, y: cross_cursor.y};
 				}
