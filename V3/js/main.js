@@ -413,7 +413,7 @@ window.addEventListener("load", (e) => {
     // =========== This part is required: =========== 
     // Initialize the "judge" object with the number of tasks per trial and your team name. 
     // The third parameter sets the trial engine in "verbose" mode or not -- if it is set to "true", all the events will be logged to the Console. (You may wish to set it to "false" if you find these logs overwhelming.)
-    const trial = new Trial(tasksLength, "NAME", true);
+    const trial = new Trial(tasksLength, "JoshLawrenceManyaNandini", true);
     document.getElementById("main").style.alignItems = "flex-start";
     document.getElementById("main").style.justifyContent = "flex-end";
     // You also need to add some way for the user to indicate they are done with their task. 
